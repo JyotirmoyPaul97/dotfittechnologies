@@ -1,0 +1,22 @@
+# dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Vercel local project metadata
+.vercel/
+.kilo/
+supabase/.temp/
+
+# logs and caches
+*.log
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
