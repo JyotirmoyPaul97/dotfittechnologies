@@ -21,7 +21,7 @@ export interface AuthContextValue {
   profile: ProfileFormData | null;
   profileLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null; notice?: string }>;
   signOut: () => Promise<{ error: string | null }>;
   clearError: () => void;
   loadProfile: () => Promise<void>;
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     loadProfile();
-  }, [user?.id, loadProfile, isSupabaseConfigured]);
+  }, [user?.id, loadProfile]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -97,23 +97,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Restore existing session on mount
     (async () => {
-      const { data, error: sessionError } = await supabase.auth.getSession();
-      if (!mounted) return;
-      if (sessionError) {
-        setError(sessionError.message);
-      }
-      const sessionUser = data.session?.user ?? null;
-      setSession(data.session ?? null);
-      setUser(sessionUser);
-      if (sessionUser) {
-        setProfileLoading(true);
-        const profileData = await getProfile(sessionUser.id);
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
         if (!mounted) return;
-        setProfile(profileData ?? null);
-        loadedUserIdRef.current = sessionUser.id;
-        setProfileLoading(false);
+        if (sessionError) setError(sessionError.message);
+        const sessionUser = data.session?.user ?? null;
+        setSession(data.session ?? null);
+        setUser(sessionUser);
+        if (sessionUser) {
+          setProfileLoading(true);
+          const profileData = await getProfile(sessionUser.id);
+          if (!mounted) return;
+          setProfile(profileData ?? null);
+          loadedUserIdRef.current = sessionUser.id;
+          setProfileLoading(false);
+        }
+      } catch (err) {
+        if (mounted) setError(err instanceof Error ? err.message : "Could not restore your session.");
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          setProfileLoading(false);
+        }
       }
-      setLoading(false);
     })();
 
     // Listen for auth state changes (login, logout, token refresh)
@@ -138,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [isSupabaseConfigured]);
+  }, []);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -146,24 +152,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: "Supabase is not configured." };
       }
       clearError();
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (authError) {
-        setError(authError.message);
-        return { error: authError.message };
-      }
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.session.user);
-        setProfileLoading(true);
-        const profileData = await getProfile(data.session.user.id);
-        setProfile(profileData ?? null);
-        loadedUserIdRef.current = data.session.user.id;
+      try {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        if (authError) {
+          setError(authError.message);
+          return { error: authError.message };
+        }
+        if (data.session) {
+          setSession(data.session);
+          setUser(data.session.user);
+          setProfileLoading(true);
+          const profileData = await getProfile(data.session.user.id);
+          setProfile(profileData ?? null);
+          loadedUserIdRef.current = data.session.user.id;
+          setProfileLoading(false);
+        }
+        return { error: null };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not connect to Supabase.";
+        setError(message);
         setProfileLoading(false);
+        return { error: message };
       }
-      return { error: null };
     },
     [clearError]
   );
@@ -172,10 +182,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!isSupabaseConfigured) {
       return { error: "Supabase is not configured." };
     }
-    const { error: authError } = await supabase.auth.signOut();
-    if (authError) {
-      setError(authError.message);
-      return { error: authError.message };
+    try {
+      const { error: authError } = await supabase.auth.signOut();
+      if (authError) {
+        setError(authError.message);
+        return { error: authError.message };
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not sign out.";
+      setError(message);
+      return { error: message };
     }
     setSession(null);
     setUser(null);
@@ -192,25 +208,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: "Supabase is not configured." };
       }
       clearError();
-      const { data, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-      if (authError) {
-        setError(authError.message);
-        return { error: authError.message };
-      }
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.session.user);
-        setProfileLoading(true);
-        const profileData = await getProfile(data.session.user.id);
-        setProfile(profileData ?? null);
-        loadedUserIdRef.current = data.session.user.id;
+      try {
+        const { data, error: authError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: typeof window !== "undefined" ? { emailRedirectTo: window.location.origin } : undefined,
+        });
+        if (authError) {
+          setError(authError.message);
+          return { error: authError.message };
+        }
+        if (data.session) {
+          setSession(data.session);
+          setUser(data.session.user);
+          setProfileLoading(true);
+          const profileData = await getProfile(data.session.user.id);
+          setProfile(profileData ?? null);
+          loadedUserIdRef.current = data.session.user.id;
+          setProfileLoading(false);
+          return { error: null };
+        }
+        return {
+          error: null,
+          notice: "Account created. Check your email for the confirmation link, then log in to continue.",
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Could not connect to Supabase.";
+        setError(message);
         setProfileLoading(false);
-        return { error: null };
+        return { error: message };
       }
-      return { error: "Account created. Confirm your email, then log in." };
     },
     [clearError]
   );
@@ -235,7 +262,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       error,
-      isSupabaseConfigured,
       profile,
       profileLoading,
       signIn,

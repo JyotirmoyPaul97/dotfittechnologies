@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { updateProfile, ProfileFormData } from "@/lib/profiles";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CheckCircle2, Loader2, AlertTriangle } from "lucide-react";
@@ -33,7 +32,7 @@ const emptyForm: ProfileFormData = {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading: authLoading, isConfigured, profile, profileLoading, loadProfile } =
+  const { user, loading: authLoading, isConfigured, profile, profileLoading, loadProfile, signOut } =
     useAuth();
   const [formData, setFormData] = useState<ProfileFormData>(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -148,17 +147,17 @@ export default function ProfilePage() {
     }
   };
 
-  const handleDeleteProfile = async () => {
-    if (!window.confirm("Are you sure you want to sign out? Profile deletion is not enabled yet.")) {
-      return;
-    }
-
+  const handleSignOut = async () => {
     setDeleting(true);
     setError(null);
 
     try {
-      await supabase.auth.signOut();
-      router.push("/");
+      const result = await signOut();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.replace("/");
     } catch {
       setError("Failed to sign out. Please try again.");
     } finally {
@@ -411,7 +410,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between gap-4 pt-4">
                 <button
                   type="button"
-                  onClick={handleDeleteProfile}
+                  onClick={handleSignOut}
                   disabled={deleting}
                   className={`text-xs ${deleting ? "cursor-not-allowed opacity-50" : "text-gray-400 transition-colors hover:text-[#ff6b6b]"}`}
                 >

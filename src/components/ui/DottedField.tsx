@@ -195,7 +195,7 @@ export function DottedField({
       window.removeEventListener("scroll", handleScroll);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [reducedMotion]);
+  }, [reducedMotion, baseAlpha, mouseRadius, mouseStrength, spacing]);
 
   if (reducedMotion) return null;
 

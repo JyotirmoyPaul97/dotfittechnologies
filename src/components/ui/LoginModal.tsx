@@ -9,7 +9,7 @@ interface LoginModalContentProps {
   onClearError: () => void;
   onSuccess: () => void;
   onSignIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  onSignUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  onSignUp: (email: string, password: string) => Promise<{ error: string | null; notice?: string }>;
   onSwitchToSignup: () => void;
 }
 
@@ -27,21 +27,29 @@ export function LoginModalContent({
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConfigured) return;
     setSubmitting(true);
     setLocalError(null);
+    setLocalNotice(null);
     onClearError();
 
-    const result =
+    const result: { error: string | null; notice?: string } =
       mode === "login"
         ? await onSignIn(email, password)
         : await onSignUp(email, password);
 
     if (result.error) {
       setLocalError(result.error);
+      setSubmitting(false);
+      return;
+    }
+
+    if (result.notice) {
+      setLocalNotice(result.notice);
       setSubmitting(false);
       return;
     }
@@ -53,6 +61,7 @@ export function LoginModalContent({
   const toggleMode = (next: "login" | "signup") => {
     setMode(next);
     setLocalError(null);
+    setLocalNotice(null);
     onClearError();
   };
 
@@ -137,6 +146,12 @@ export function LoginModalContent({
             <p className="text-xs text-red-300 font-mono">
               {localError || error}
             </p>
+          </div>
+        )}
+
+        {localNotice && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3" role="status">
+            <p className="text-xs text-emerald-200">{localNotice}</p>
           </div>
         )}
 

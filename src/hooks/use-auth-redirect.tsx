@@ -12,9 +12,9 @@ export function useRequireAuth() {
   useEffect(() => {
     if (loading || profileLoading) return;
 
-    // If user is not authenticated, redirect to homepage
+    // If user is not authenticated, take them to the real sign-in route.
     if (!user) {
-      router.push("/");
+      router.replace("/login");
       return;
     }
 
